@@ -53,6 +53,8 @@ PYTHON="$(uv python find 3.12)"
 
 export VITIS_AI_PREFIX="$CACHE/vart" OPENNVE_VITIS_NO_RPATH=1
 export CARGO_TARGET_DIR="$CACHE/target"
+# Rust tests here, where the runtime's libraries (boost of Ubuntu 22.04) are
+(cd "$IO" && LD_LIBRARY_PATH="$CACHE/vart/lib" cargo test -p vitis-runtime)
 OUT=/tmp/wheels
 rm -rf "$OUT"
 (cd "$IO/python" && uvx --python "$PYTHON" "maturin>=1.8,<2" build --release --interpreter "$PYTHON" \

@@ -1,6 +1,6 @@
 # Builds the ready-made opennve_vitis package (Vitis AI Runtime built from source, Ubuntu 22.04,
-# glibc 2.35) and tests it without a DPU: generated models on VART's dummy runner, Rust tests,
-# Python 3.11 (Debian) and 3.14, install.sh on a fake Kria KV260.
+# glibc 2.35) and tests it without a DPU: generated models on VART's dummy runner, Rust tests (in
+# the build container), Python 3.11 (Debian) and 3.14, install.sh on a fake Kria KV260.
 # A tag v* publishes the aarch64 package (for the Kria boards) and install.sh in a GitHub release.
 name: CI
 
@@ -55,13 +55,11 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      - name: Rust
+      - name: Rust (format, clippy; the tests run in the build container)
         run: |
           export VITIS_AI_PREFIX=$PWD/.cache/${{ matrix.machine }}/vart
-          export LD_LIBRARY_PATH=$VITIS_AI_PREFIX/lib
           cargo fmt --all --check
           cargo clippy --workspace --all-targets -- -D warnings
-          cargo test -p vitis-runtime
 
       - name: install.sh (fake Kria KV260)
         run: WHEEL=$(ls dist/opennve_vitis-*.whl) PYTHON_FOR_TESTS=python bash tests/test_install.sh
