@@ -1,0 +1,14 @@
+[package]
+name = "opennve-vitis-python"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+name = "_opennve_vitis"
+crate-type = ["cdylib"]
+
+[dependencies]
+vitis-runtime = { path = "../runtime" }
+# abi3: one wheel for all Python versions from 3.11 (buffer protocol in the limited API)
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py311"] }

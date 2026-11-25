@@ -1,0 +1,92 @@
+# Builds the ready-made opennve_vitis package (Vitis AI Runtime built from source, Ubuntu 22.04,
+# glibc 2.35) and tests it without a DPU: generated models on VART's dummy runner, Rust tests,
+# Python 3.11 (Debian) and 3.14, install.sh on a fake Kria KV260.
+# A tag v* publishes the aarch64 package (for the Kria boards) and install.sh in a GitHub release.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.machine }}
+    runs-on: ${{ matrix.machine == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        machine: [aarch64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vitis AI Runtime (cached)
+        uses: actions/cache@v4
+        with:
+          path: .cache/${{ matrix.machine }}/vart
+          key: vart-${{ matrix.machine }}-${{ hashFiles('ci/build_vart.sh', 'ci/patch_vart.py') }}
+
+      - name: Build (Ubuntu 22.04)
+        run: |
+          docker run --rm -v "$PWD:/io" ubuntu:22.04 bash /io/ci/build_wheel.sh
+          sudo chown -R "$(id -u)" .cache dist
+          rm -rf .cache/${{ matrix.machine }}/vart-work .cache/${{ matrix.machine }}/target
+
+      - name: Test on Debian Bookworm (Python 3.11, glibc 2.36)
+        run: |
+          docker run --rm -v "$PWD:/io" python:3.11-slim-bookworm bash -c '
+            set -e
+            pip install --quiet /io/dist/opennve_vitis-*.whl pytest
+            python -c "import opennve_vitis as v; print(v.__version__, v.VART_VERSION, v.status())"
+            cd /tmp && python -m pytest -q /io/python/tests'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Test with Python 3.14
+        run: |
+          python -m pip install --quiet dist/opennve_vitis-*.whl pytest
+          (cd /tmp && python -m pytest -q $GITHUB_WORKSPACE/python/tests)
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Rust
+        run: |
+          export VITIS_AI_PREFIX=$PWD/.cache/${{ matrix.machine }}/vart
+          export LD_LIBRARY_PATH=$VITIS_AI_PREFIX/lib
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test -p vitis-runtime
+
+      - name: install.sh (fake Kria KV260)
+        run: WHEEL=$(ls dist/opennve_vitis-*.whl) PYTHON_FOR_TESTS=python bash tests/test_install.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.machine }}
+          path: dist/*.whl
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-aarch64
+          path: dist
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "openNVE-vitis $GITHUB_REF_NAME" \
+            --notes "Ready-made opennve_vitis package for AMD Kria boards (Linux aarch64, Ubuntu 22.04 and newer, Python 3.11+), with the Vitis AI Runtime inside. Install with install.sh (or opennve plugin install vitis)."
+          gh release upload "$GITHUB_REF_NAME" dist/*.whl install.sh --clobber

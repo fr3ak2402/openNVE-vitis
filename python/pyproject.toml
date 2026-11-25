@@ -1,0 +1,36 @@
+[build-system]
+requires = ["maturin>=1.8,<2"]
+build-backend = "maturin"
+
+[project]
+name = "opennve-vitis"
+description = "DPU of AMD Kria boards for openNVE: run compiled Vitis AI models (.xmodel) with the Vitis AI Runtime, in Rust"
+readme = "../README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26"]
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.urls]
+Repository = "https://github.com/fr3ak2402/openNVE-vitis"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.maturin]
+module-name = "opennve_vitis._opennve_vitis"
+python-source = "."
+python-packages = ["opennve_vitis"]
+features = ["pyo3/extension-module"]
+# ci/repair_wheel.py copies the Vitis AI Runtime into the wheel (opennve_vitis/lib); XRT stays
+# outside (it belongs to the zocl driver of the board)
+auditwheel = "skip"
+compatibility = "linux"
+
+# openNVE finds the plugin through this entry point (opennve plugin list)
+[project.entry-points."opennve.plugins"]
+vitis = "opennve_vitis.opennve_plugin:plugin"
