@@ -7,6 +7,10 @@
 #
 # Usage: ci/build_vart.sh PREFIX [WORKDIR]
 #
+# The XRT libraries only have to be there to link against; they may come from a newer system than
+# the build (ci/build_wheel.sh uses those of Ubuntu 24.04 on Ubuntu 22.04): VART's small tools
+# (executables) are linked with --allow-shlib-undefined for that.
+#
 # Environment:
 #   XRT_INCLUDE   directory that contains xrt/ (default /usr/include)
 #   XRT_LIBDIR    directory with libxrt_core.so.2 and libxrt_coreutil.so.2
@@ -91,7 +95,7 @@ build() { # name source-dir extra-args...
   cmake -S "$src" -B "$WORK/build-$name" "${common[@]}" "$@" > "$WORK/$name.configure.log" 2>&1 ||
     { tail -40 "$WORK/$name.configure.log"; exit 1; }
   cmake --build "$WORK/build-$name" -j "$JOBS" > "$WORK/$name.build.log" 2>&1 ||
-    { grep -E 'error|Error' "$WORK/$name.build.log" | head -40; exit 1; }
+    { grep -A30 'FAILED:' "$WORK/$name.build.log" | head -80 || tail -60 "$WORK/$name.build.log"; exit 1; }
   cmake --install "$WORK/build-$name" > /dev/null
   touch "$WORK/build-$name/.done"
 }
@@ -110,6 +114,7 @@ build vart "$RT/vart" "${vitis[@]}" \
   -DENABLE_DPU_RUNNER=ON -DENABLE_CPU_RUNNER=OFF -DENABLE_SIM_RUNNER=OFF \
   -DENABLE_XRNN_RUNNER=OFF -DENABLE_RNN_RUNNER=OFF \
   -DXRT_FOUND=OFF \
+  -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined \
   -DCMAKE_MODULE_PATH="$RT/vart/cmake" \
   -DCMAKE_INCLUDE_PATH="$XRT_INCLUDE" -DCMAKE_LIBRARY_PATH="$XRT_LIBDIR"
 
