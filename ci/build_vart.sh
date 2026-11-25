@@ -57,9 +57,11 @@ if [ ! -d vitis-ai ]; then
   echo "src/vai_runtime/" > vitis-ai/.git/info/sparse-checkout
   git -C vitis-ai fetch -q --depth 1 --filter=blob:none origin "$VITIS_AI_REF"
   git -C vitis-ai checkout -q FETCH_HEAD
-  # warnings of newer compilers are not errors for us
+  # warnings of newer compilers are not errors for us; C++17 everywhere (abseil and protobuf are
+  # built with C++17, their headers need it; some modules ask for C++14)
   find vitis-ai/src/vai_runtime \( -name '*.cmake' -o -name CMakeLists.txt \) \
-    -exec sed -i 's/-Werror//g' {} +
+    -exec sed -i -e 's/-Werror//g' -e 's/-std=gnu++14/-std=gnu++17/g' -e 's/-std=c++14/-std=c++17/g' \
+    -e 's/CMAKE_CXX_STANDARD 14/CMAKE_CXX_STANDARD 17/g' {} +
 fi
 python3 "$HERE/patch_vart.py" vitis-ai/src/vai_runtime
 RT=$WORK/vitis-ai/src/vai_runtime
